@@ -8,9 +8,9 @@ from torch.distributions import Normal
 
 
 class HunterPolicy(nn.Module):
-    def __init__(self,env,max_speed = 1):
+    def __init__(self,env,max_action = 1):
         super(HunterPolicy, self).__init__()
-        self.max_speed = max_speed
+        self.max_action = max_action
         self.state_space = env.observation_space
         self.action_space = env.action_space
 
@@ -28,11 +28,11 @@ class HunterPolicy(nn.Module):
         self.loss_history = []
         
     def get_action(self,latent_action):
-        action = self.max_speed*latent_action*(torch.exp(-(latent_action**2).sum(dim = -1))/torch.norm(latent_action,dim = -1)).unsqueeze(-1)
+        action = self.max_action*latent_action*(torch.exp(-(latent_action**2).sum(dim = -1))/torch.norm(latent_action,dim = -1)).unsqueeze(-1)
         return action
     
     def get_log_jacobian(self,latent_action):
-        return 2*((latent_action**2).sum()-np.log(self.max_speed))-np.log(2)
+        return 2*((latent_action**2).sum()-np.log(self.max_action))-np.log(2)
         
     def log_prob(self,latent_action):
         latent_log_prob = self.latent_action_dist.log_prob(latent_action).sum(dim = -1)

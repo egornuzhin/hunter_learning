@@ -51,8 +51,7 @@ def train(policy,env,episodes,learning_rate = 0.0001,gamma = 0.9, verbose=True):
         for time in range(1000):
             action = select_action(policy,state)
             # Step through environment using chosen action
-            hunter_shift = action
-            reward = env.step(hunter_shift)
+            reward = env.step(action)
             state = env.state
             # Save reward
             policy.reward_episode.append(reward)

@@ -2,6 +2,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 from time import sleep
 from environment import HunterEnvironment
 
@@ -38,7 +39,7 @@ def model_hunter_learning(name,policy,victim_policy,hunter_start_position = [0,0
     env.step(hunter_start_position)
     state = env.state
     while True:
-        policy(state)
+        policy(torch.Tensor(np.hstack(state)))
         action,_ = policy.sample_action()
         hunter_shift = action
         env.step(hunter_shift)
