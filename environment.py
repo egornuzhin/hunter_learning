@@ -1,37 +1,68 @@
 import numpy as np
 
 class HunterEnvironment:
-    def __init__(self,victim_policy,target_distance = 2,distance_accuracy = 1, victim_position=0, hunter_position = [0,0]):
+    def __init__(self,victim_policy,target_distance = 2,distance_accuracy = 1, time = 0, hunter_position = [0,0], max_acceleration = np.inf):
         self.observation_space = 6
         self.action_space = 2
+        self.max_acceleration = max_acceleration
         self.distance_accuracy = distance_accuracy
         self.target_distance = target_distance
         self.victim_policy = victim_policy
+        self.time = time
         
-        # if None - get random position on elipse
-        if victim_position is None:
-            self.time = np.random.randint(1000)
-        else:
-            self.time = victim_position
-            
-        self.victim_position = np.array(self.victim_policy(self.time ))
+        
+        self.victim_position = np.array(self.victim_policy(self.time))
+        last_victim_position = np.array(self.victim_policy(self.time-1))
+        self.victim_shift = self.victim_position - last_victim_position
         self.time += 1
         
         self.hunter_position = np.array(hunter_position)
-        self.initial_victim_position = self.victim_position
-        self.initial_hunter_position = self.hunter_position
         self.hunter_shift = np.array([0, 0])
-        self.hunter_trajectory = []
-        self.victim_trajectory = []
-        self.distance = np.linalg.norm(self.victim_position-self.hunter_position)
+        
+        
+        self.hunter_trajectory = [self.hunter_position]
+        self.victim_trajectory = [self.victim_position]
+        
+        self.distance = np.linalg.norm(last_victim_position-self.hunter_position)
+        self.update_state()
+        
         
 
-    def step(self, hunter_shift):
-        hunter_shift = np.array(hunter_shift)
-        self.update_positions(hunter_shift)
+    def step(self, action):
+        self.update_hunter_shift(action)
+        self.update_positions()
         self.update_state()
         reward = self.get_reward()
         return reward
+    
+#     def update_hunter_shift(self,action):
+#         force = action.data.numpy()
+#         last_shift = self.hunter_shift
+#         self.hunter_shift = last_shift+force/self.mass
+
+    def get_c(self,last_shift,desired_shift):
+        if np.linalg.norm(last_shift-desired_shift)<= self.max_acceleration:
+            c = 1
+        else:
+            b = last_shift@desired_shift
+            a = (desired_shift**2).sum()
+            D = b**2-a*((last_shift**2).sum()-self.max_acceleration**2)
+            c = max((b-np.sqrt(D))/a,(b+np.sqrt(D))/a)
+
+        return c
+        
+    def update_hunter_shift(self,action):
+        last_shift = self.hunter_shift
+        desired_shift = action.data.numpy()
+        c = self.get_c(last_shift,desired_shift)
+        if 0<=c and c<=1:
+            self.hunter_shift = desired_shift*c
+        else:
+            k = 1-self.max_acceleration/np.linalg.norm(last_shift)
+            self.hunter_shift = last_shift*max(k,0)
+            
+    
+        
     
     def get_reward(self):
         if self.is_hunter_on_target_distance:
@@ -43,10 +74,9 @@ class HunterEnvironment:
         return reward
         
         
-    def update_positions(self,hunter_shift):
+    def update_positions(self):
         #hunter
-        self.hunter_shift = hunter_shift
-        self.hunter_position = self.hunter_position+hunter_shift
+        self.hunter_position = self.hunter_position+self.hunter_shift
         self.hunter_trajectory.append(self.hunter_position)
         # victim
         new_victim_position = self.victim_policy(self.time)
@@ -72,22 +102,17 @@ class HunterEnvironment:
         
     def reset(self):
         
-        self.__init__(victim_policy=self.victim_policy, target_distance=self.target_distance, 
-                      distance_accuracy=self.distance_accuracy, victim_position=None,
-                      hunter_position=self.initial_hunter_position)
         
-        flip = np.random.uniform()
-        if flip<1/2:
-            v = np.random.uniform(-1, 1, size=2)
-            v = v/np.linalg.norm(v)
-            self.hunter_position = self.victim_position + v*self.target_distance
-            self.state = [False,True,np.array([0.,0.]),np.array([0.,0.])]
-        else:
-            self.state = [False,False,np.array([0.,0.]),np.array([0.,0.])]
-            v = np.random.uniform(-1, 1, size=2)
-            v_norm = np.linalg.norm(v)
-            v_new = v/v_norm*(v_norm+1)*self.target_distance*2
-            self.hunter_position = self.victim_position +v_norm
-
-        self.hunter_trajectory = [self.hunter_position]
-        self.victim_trajectory = [self.victim_position]
+        median = self.target_distance
+        r = np.random.exponential(median/np.log(2))
+        direction = np.random.rand(2)
+        radial_shift = r*(direction/np.linalg.norm(direction))
+        
+        time = np.random.randint(1000)
+        victim_position = np.array(self.victim_policy(time))
+        hunter_position = victim_position+radial_shift
+        
+        
+        self.__init__(victim_policy=self.victim_policy, target_distance=self.target_distance, 
+                      distance_accuracy=self.distance_accuracy, time=time,
+                      hunter_position=hunter_position, max_acceleration = self.max_acceleration)
