@@ -33,17 +33,15 @@ def update_graph(graph,hunter_trajectoty,victim_trajectoty):
     fig.canvas.draw()
 
     
-def model_hunter_learning(name,policy,victim_policy,hunter_start_position = [0,0]):
+def model_hunter_learning(name,policy,env,victim_policy,hunter_start_position = [0,0]):
     graph = create_graph(name)
-    env = HunterEnvironment(victim_policy)
+    env.reset()
     env.step(hunter_start_position)
     state = env.state
     while True:
         policy(torch.Tensor(np.hstack(state)))
         action,_ = policy.sample_action()
-        hunter_shift = action
-        env.step(hunter_shift)
-        state = env.state
+        env.step(action)
         update_graph(graph,np.array(env.hunter_trajectory).T,np.array(env.victim_trajectory).T)
             
         
