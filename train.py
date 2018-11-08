@@ -4,6 +4,10 @@ import time
 from IPython import  display
 import torch.optim as optim
 import numpy as np
+import os
+import shutil
+
+
 
 def select_action(policy,state):
     #Select an action (0 or 1) by running policy model and choosing based on the probabilities in state
@@ -41,8 +45,14 @@ def update_policy(policy,optimizer,gamma):
     policy.policy_history = torch.Tensor()
     policy.reward_episode= []
 
-def train(policy,env,episodes,learning_rate = 0.0001,gamma = 0.9, verbose=True):
+def train(policy,env,episodes,learning_rate = 0.0001,gamma = 0.9, verbose=True, save_policy = True):
     optimizer = optim.Adam(policy.parameters(), lr=learning_rate)
+    
+    dirpath = 'train_models'
+    if os.path.exists(dirpath):
+        shutil.rmtree(dirpath)
+    os.mkdir(dirpath)
+
     for episode in range(episodes):
         env.reset() # Reset environment and record the starting state
         state = env.state
@@ -59,6 +69,9 @@ def train(policy,env,episodes,learning_rate = 0.0001,gamma = 0.9, verbose=True):
         
         
         update_policy(policy,optimizer,gamma)
+
+        if save_policy and episode % 100 == 0:
+            torch.save(policy,dirpath+'/policy_'+str(episode)+'.p') 
         
         if verbose and episode % 10 == 0:
             
