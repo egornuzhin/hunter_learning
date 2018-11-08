@@ -53,7 +53,7 @@ class HunterEnvironment:
         
     def update_hunter_shift(self,action):
         last_shift = self.hunter_shift
-        desired_shift = action.data.numpy()
+        desired_shift = np.array(action)
         c = self.get_c(last_shift,desired_shift)
         if 0<=c and c<=1:
             self.hunter_shift = desired_shift*c
