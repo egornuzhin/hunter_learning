@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from time import sleep
-from environment import HunterEnvironment
 
 def create_graph(name):
     plt.ion()
