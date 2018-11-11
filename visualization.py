@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from time import sleep
-from environment import HunterEnvironment
 
 def create_graph(name):
     plt.ion()
@@ -33,15 +32,17 @@ def update_graph(graph,hunter_trajectoty,victim_trajectoty):
     fig.canvas.draw()
 
     
-def model_hunter_learning(name,policy,env,victim_policy,hunter_start_position = [0,0]):
+def model_hunter_learning(name,policy,env,hunter_start_position = [0,0]):
     graph = create_graph(name)
     env.reset()
-    env.step(hunter_start_position)
+    env.hunter_position = hunter_start_position
+    env.hunter_trajectory = [hunter_start_position]
     state = env.state
     while True:
         policy(torch.Tensor(np.hstack(state)))
         action,_ = policy.sample_action()
         env.step(action)
+        state = env.state
         update_graph(graph,np.array(env.hunter_trajectory).T,np.array(env.victim_trajectory).T)
             
         
