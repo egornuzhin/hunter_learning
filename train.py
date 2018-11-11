@@ -20,7 +20,7 @@ def select_action(policy,state):
         policy.policy_history = (log_prob.unsqueeze(0))
     return action
 
-def compute_reward(policy,gamma):
+def compute_value_function(policy,gamma):
     
     R = 0
     rewards = []
@@ -43,6 +43,7 @@ def compute_loss(policy, rewards, baseline_rewards=None):
         rewards = (rewards - rewards.mean()) / (rewards.std())
     else:
         rewards = rewards - baseline_rewards
+#         rewards = rewards/rewards.std()
     
     # Calculate loss
     loss = (torch.sum(torch.mul(policy.policy_history, rewards).mul(-1), -1))
@@ -55,12 +56,12 @@ def compute_loss(policy, rewards, baseline_rewards=None):
 def compute_baseline_loss(baseline, rewards, baseline_rewards):
     
     # Calculate loss
-    rewards = torch.FloatTensor(rewards)
-    baseline_rewards = torch.cat(baseline_rewards, dim=-1)
+#     rewards = torch.FloatTensor(rewards)
+#     baseline_rewards = torch.cat(baseline_rewards, dim=-1)
     loss = (rewards-baseline_rewards).pow(2).mean()
     
     baseline.loss_history.append(loss.data[0])
-    baseline.reward_history.append(torch.cat(baseline.reward_episode, dim=-1).sum().data)
+    baseline.reward_history.append(torch.cat(baseline.reward_episode, dim=-1).mean().data)
    
     return loss
 
@@ -114,9 +115,9 @@ def visualize(env, policy, baseline):
 
     plt.show()
     
-def train(policy,env, baseline, episodes,learning_rate = 0.0001,gamma = 0.9, verbose=True, save_policy = True, batch=1):
+def train(policy,env, baseline, episodes,learning_rate = 1e-4,gamma = 0.9, verbose=True, save_policy = True, batch=1):
     optimizer = optim.Adam(policy.parameters(), lr=learning_rate)
-    if baseline is not None: b_optimizer = optim.Adam(baseline.parameters(), lr=0.001)
+    if baseline is not None: b_optimizer = optim.Adam(baseline.parameters(), lr=1e-3)
     
     dirpath = 'train_models'
     if os.path.exists(dirpath):
@@ -126,23 +127,26 @@ def train(policy,env, baseline, episodes,learning_rate = 0.0001,gamma = 0.9, ver
     loss = 0
     for episode in range(0, episodes):
         env.reset() # Reset environment and record the starting state   
-        play_episode(policy, env, baseline)
-       
+        play_episode(policy, env, baseline)        
+        
+        rewards = compute_value_function(policy, gamma)
+        
         if baseline is not None:
             # baseline backprop
-            b_loss = compute_baseline_loss(baseline, policy.reward_episode, baseline.reward_episode) 
+            baseline_rewards = torch.cat(baseline.reward_episode, dim=-1)
+            b_loss = compute_baseline_loss(baseline, rewards, baseline_rewards) 
             b_optimizer.zero_grad()
-            b_loss.backward()
+            b_loss.backward(retain_graph=True)
             b_optimizer.step()
+        else:
+            baseline_rewards = None
         
+#         if baseline is not None:
+#             baseline_rewards = compute_reward(baseline, gamma)
+#         else: 
+#             baseline_rewards = None
         
         # policy backprop
-        rewards = compute_reward(policy, gamma)
-        if baseline is not None:
-            baseline_rewards = compute_reward(baseline, gamma)
-        else: 
-            baseline_rewards = None
-            
         loss += compute_loss(policy, rewards, baseline_rewards)
         policy.reset_game()    
         if baseline is not None: baseline.reset_game()
