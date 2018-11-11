@@ -129,17 +129,17 @@ def train(policy,env, baseline, episodes,learning_rate = 1e-4,gamma = 0.9, verbo
         env.reset() # Reset environment and record the starting state   
         play_episode(policy, env, baseline)        
         
-        rewards = compute_value_function(policy, gamma)
+        values = compute_value_function(policy, gamma)
         
         if baseline is not None:
             # baseline backprop
-            baseline_rewards = torch.cat(baseline.reward_episode, dim=-1)
-            b_loss = compute_baseline_loss(baseline, rewards, baseline_rewards) 
+            baseline_values = torch.cat(baseline.reward_episode, dim=-1)
+            b_loss = compute_baseline_loss(baseline, values, baseline_values) 
             b_optimizer.zero_grad()
             b_loss.backward(retain_graph=True)
             b_optimizer.step()
         else:
-            baseline_rewards = None
+            baseline_values = None
         
 #         if baseline is not None:
 #             baseline_rewards = compute_reward(baseline, gamma)
@@ -147,7 +147,7 @@ def train(policy,env, baseline, episodes,learning_rate = 1e-4,gamma = 0.9, verbo
 #             baseline_rewards = None
         
         # policy backprop
-        loss += compute_loss(policy, rewards, baseline_rewards)
+        loss += compute_loss(policy, values, baseline_values)
         policy.reset_game()    
         if baseline is not None: baseline.reset_game()
             
