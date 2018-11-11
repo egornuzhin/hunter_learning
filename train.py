@@ -20,7 +20,8 @@ def select_action(policy,state):
         policy.policy_history = (log_prob.unsqueeze(0))
     return action
 
-def update_policy(policy,optimizer,gamma):
+def compute_reward(policy,gamma):
+    
     R = 0
     rewards = []
     
@@ -28,47 +29,131 @@ def update_policy(policy,optimizer,gamma):
     for r in (policy.reward_episode[::-1]):
         R = r + gamma * R
         rewards.insert(0,R)
-    # Scale rewards
+
     rewards = torch.FloatTensor(rewards)
-    rewards = (rewards - rewards.mean()) / (rewards.std())
+    
+    return rewards
+    
+
+def compute_loss(policy, rewards, baseline_rewards=None):
+    
+    policy.reward_history.append(np.sum(policy.reward_episode))
+    # Scale rewards
+    if baseline_rewards is None:
+        rewards = (rewards - rewards.mean()) / (rewards.std())
+    else:
+        rewards = rewards - baseline_rewards
     
     # Calculate loss
     loss = (torch.sum(torch.mul(policy.policy_history, rewards).mul(-1), -1))
-    # Update network weights
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
     
-    #Save and intialize episode history counters
     policy.loss_history.append(loss.data[0])
-    policy.reward_history.append(np.sum(policy.reward_episode))
-    policy.policy_history = torch.Tensor()
-    policy.reward_episode= []
 
-def train(policy,env,episodes,learning_rate = 0.0001,gamma = 0.9, verbose=True, save_policy = True):
+   
+    return loss
+
+def compute_baseline_loss(baseline, rewards, baseline_rewards):
+    
+    # Calculate loss
+    rewards = torch.FloatTensor(rewards)
+    baseline_rewards = torch.cat(baseline_rewards, dim=-1)
+    loss = (rewards-baseline_rewards).pow(2).mean()
+    
+    baseline.loss_history.append(loss.data[0])
+    baseline.reward_history.append(torch.cat(baseline.reward_episode, dim=-1).sum().data)
+   
+    return loss
+
+def play_episode(policy, env, baseline):
+    
+    for time in range(1000):
+        action = select_action(policy, env.state)
+        
+        #baseline update
+        if baseline is not None:
+            baseline_reward = baseline(torch.Tensor(np.hstack(env.state)))
+            baseline.reward_episode.append(baseline_reward)
+        # Step through environment using chosen action    
+        # conmpute reward, renew state
+        reward = env.step(action) 
+        # Save reward
+        policy.reward_episode.append(reward)
+        
+    
+def visualize(env, policy, baseline):
+    
+    plt.figure(figsize=(16, 10))
+
+    plt.subplot(221)
+    plt.title("reward")
+    plt.xlabel("#iteration")
+    plt.ylabel("reward")
+    plt.plot(policy.reward_history, label = 'reward')
+
+    plt.subplot(222)
+    victim = np.array(env.victim_trajectory).T
+    plt.plot(victim[0],victim[1], label = 'victim')
+    plt.plot(victim[0][0], victim[1][0], 'o', label = 'initiial_victim')
+    hunter = np.array(env.hunter_trajectory).T
+    plt.plot(hunter[0], hunter[1], label = 'hunter')
+    plt.plot(hunter[0][0], hunter[1][0], 'o', label = 'initiial_hunter')
+    plt.legend()
+
+    if baseline is not None:
+        plt.subplot(223)
+        plt.title("baseline_reward")
+        plt.xlabel("#iteration")
+        plt.ylabel("reward")
+        plt.plot(baseline.reward_history, label = 'reward')
+
+        plt.subplot(224)
+        plt.title("baseline_loss")
+        plt.xlabel("#iteration")
+        plt.ylabel("loss")
+        plt.plot(baseline.loss_history, label = 'loss')
+
+    plt.show()
+    
+def train(policy,env, baseline, episodes,learning_rate = 0.0001,gamma = 0.9, verbose=True, save_policy = True, batch=1):
     optimizer = optim.Adam(policy.parameters(), lr=learning_rate)
+    if baseline is not None: b_optimizer = optim.Adam(baseline.parameters(), lr=0.001)
     
     dirpath = 'train_models'
     if os.path.exists(dirpath):
         shutil.rmtree(dirpath)
     os.mkdir(dirpath)
-
-    for episode in range(episodes):
-        env.reset() # Reset environment and record the starting state
-        state = env.state
-        done = False       
     
-        for time in range(1000):
-            action = select_action(policy,state)
-            # Step through environment using chosen action
-            reward = env.step(action)
-            state = env.state
-            # Save reward
-            policy.reward_episode.append(reward)
+    loss = 0
+    for episode in range(0, episodes):
+        env.reset() # Reset environment and record the starting state   
+        play_episode(policy, env, baseline)
+       
+        if baseline is not None:
+            # baseline backprop
+            b_loss = compute_baseline_loss(baseline, policy.reward_episode, baseline.reward_episode) 
+            b_optimizer.zero_grad()
+            b_loss.backward()
+            b_optimizer.step()
         
         
-        
-        update_policy(policy,optimizer,gamma)
+        # policy backprop
+        rewards = compute_reward(policy, gamma)
+        if baseline is not None:
+            baseline_rewards = compute_reward(baseline, gamma)
+        else: 
+            baseline_rewards = None
+            
+        loss += compute_loss(policy, rewards, baseline_rewards)
+        policy.reset_game()    
+        if baseline is not None: baseline.reset_game()
+            
+        #update hunter policy 
+        if episode % batch == 0:
+            loss /= batch
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            loss=0
 
         if save_policy and episode % 100 == 0:
             torch.save(policy,dirpath+'/policy_'+str(episode)+'.p') 
@@ -76,24 +161,10 @@ def train(policy,env,episodes,learning_rate = 0.0001,gamma = 0.9, verbose=True, 
         if verbose and episode % 10 == 0:
             
             display.clear_output(wait=True)
-
-            plt.figure(figsize=(16, 6))
-            plt.subplot(221)
-            plt.title("reward")
-            plt.xlabel("#iteration")
-            plt.ylabel("reward")
-            plt.plot(policy.reward_history, label = 'reward')
-            plt.subplot(222)
-            victim = np.array(env.victim_trajectory).T
-            plt.plot(victim[0],victim[1], label = 'victim')
-            plt.plot(victim[0][0], victim[1][0], 'o', label = 'initiial_victim')
-            hunter = np.array(env.hunter_trajectory).T
-            plt.plot(hunter[0], hunter[1], label = 'hunter')
-            plt.plot(hunter[0][0], hunter[1][0], 'o', label = 'initiial_hunter')
-            plt.legend()
-           
-        
-            plt.show()
-        
-            print('Episode {}\tLast length: {:5d}\tLast reward: {:.2f}'.format(episode, time, policy.reward_history[-1]))
-
+            visualize(env, policy, baseline)
+            
+            print('Episode {} \tLast reward: {:.2f}'.format(episode, policy.reward_history[-1]))
+            
+            if baseline is not None:
+                print('Last reward: {:.2f}'.format(baseline.reward_history[-1]))
+                

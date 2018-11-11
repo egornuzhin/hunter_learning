@@ -58,10 +58,11 @@ class HunterEnvironment:
         if 0<=c and c<=1:
             self.hunter_shift = desired_shift*c
         else:
-            k = 1-self.max_acceleration/np.linalg.norm(last_shift)
+            k = 1-self.max_acceleration/max(np.linalg.norm(last_shift), 1e-10)
             self.hunter_shift = last_shift*max(k,0)
             
-    
+#             print('k', k)
+#         print('c',c)
         
     
     def get_reward(self):

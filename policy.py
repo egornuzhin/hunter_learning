@@ -13,8 +13,6 @@ class HunterPolicy(nn.Module):
         self.max_action = max_action
         self.state_space = env.observation_space
         self.action_space = env.action_space
-
-
         
         self.l1 = nn.Linear(self.state_space, 128)
         self.l2 = nn.Linear(128, 128)
@@ -44,6 +42,11 @@ class HunterPolicy(nn.Module):
         latent_action = self.latent_action_dist.sample()
         action = self.get_action(latent_action)
         return action, self.log_prob(latent_action)
+    
+    def reset_game(self):
+        
+        self.policy_history = torch.Tensor()
+        self.reward_episode = []
         
     def forward(self, state):    
             model = torch.nn.Sequential(
@@ -57,3 +60,32 @@ class HunterPolicy(nn.Module):
             mu,logsigma = torch.chunk(output,2,dim = -1)
             self.latent_action_dist = Normal(mu,(2*logsigma).exp())
             return mu,logsigma
+        
+class Baseline(nn.Module):
+    def __init__(self,env):
+        super(Baseline, self).__init__()
+        
+        self.state_space = env.observation_space
+        
+        self.model = torch.nn.Sequential(
+                nn.Linear(self.state_space, 128),
+                nn.ELU(),
+                nn.Linear(128, 128),
+                nn.ELU(),
+                nn.Linear(128, 1)
+            )
+                
+        self.reward_episode = []
+        # Overall reward and loss history
+        self.reward_history = []
+        self.loss_history = []
+        
+    def reset_game(self):
+        self.reward_episode = []
+              
+    def forward(self, state):    
+
+            baseline = self.model(state)
+
+            return baseline
+                
