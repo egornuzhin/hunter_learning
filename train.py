@@ -43,7 +43,7 @@ def compute_loss(policy, rewards, baseline_rewards=None):
         rewards = (rewards - rewards.mean()) / (rewards.std())
     else:
         rewards = rewards - baseline_rewards
-#         rewards = rewards/rewards.std()
+        rewards = (rewards - rewards.mean()) / (rewards.std())
     
     # Calculate loss
     loss = (torch.sum(torch.mul(policy.policy_history, rewards).mul(-1), -1))

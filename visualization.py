@@ -1,5 +1,3 @@
-# Event distance between victim and hunter reduced and victim, hunter velocities are known
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
