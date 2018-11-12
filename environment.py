@@ -57,11 +57,9 @@ class VelocityHunterEnvironment:
         if 0<=c and c<=1:
             self.hunter_shift = desired_shift*c
         else:
-            k = 1-self.max_acceleration/max(np.linalg.norm(last_shift), 1e-10)
+            k = 1-self.max_acceleration/np.linalg.norm(last_shift)
             self.hunter_shift = last_shift*max(k,0)
             
-#             print('k', k)
-#         print('c',c)
         
     
     def get_reward(self):
@@ -96,8 +94,8 @@ class VelocityHunterEnvironment:
         
         self.is_hunter_closer = is_hunter_closer
         self.is_hunter_on_target_distance = is_hunter_on_target_distance
-        self.state = [is_hunter_closer,is_hunter_on_target_distance,
-                      normalized_victim_shift,self.hunter_shift]
+        self.state = np.hstack([is_hunter_closer,is_hunter_on_target_distance,
+                      normalized_victim_shift,self.hunter_shift])
         
         
     def reset(self):
@@ -198,8 +196,8 @@ class ForceHunterEnvironment:
         
         self.is_hunter_closer = is_hunter_closer
         self.is_hunter_on_target_distance = is_hunter_on_target_distance
-        self.state = [is_hunter_closer,is_hunter_on_target_distance,
-                      normalized_victim_shift,normalized_hunter_shift,self.hunter_force]
+        self.state = np.hstack([is_hunter_closer,is_hunter_on_target_distance,
+                      normalized_victim_shift,normalized_hunter_shift,self.hunter_force])
         
         
     def reset(self):

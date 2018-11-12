@@ -72,7 +72,7 @@ def play_episode(policy, env, baseline):
         
         #baseline update
         if baseline is not None:
-            baseline_reward = baseline(torch.Tensor(np.hstack(env.state)))
+            baseline_reward = baseline(torch.Tensor(env.state))
             baseline.reward_episode.append(baseline_reward)
         # Step through environment using chosen action    
         # conmpute reward, renew state
@@ -115,7 +115,7 @@ def visualize(env, policy, baseline):
 
     plt.show()
     
-def train(policy,env, baseline, episodes,learning_rate = 1e-4,gamma = 0.9, verbose=True, save_policy = True, batch=1):
+def train(policy,env, episodes,learning_rate = 1e-4,gamma = 0.9, verbose=True, save_policy = True, batch=1, baseline = None):
     optimizer = optim.Adam(policy.parameters(), lr=learning_rate)
     if baseline is not None: b_optimizer = optim.Adam(baseline.parameters(), lr=1e-3)
     
