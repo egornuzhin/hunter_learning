@@ -20,6 +20,8 @@ lib64/
 parts/
 sdist/
 var/
+train_models/
+
 *.egg-info/
 .installed.cfg
 *.egg
