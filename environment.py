@@ -284,7 +284,7 @@ class GroupedHunterEnvironment:
     
     def get_reward(self):
         reward = np.clip(self.is_hunter_at_target_distance.astype(np.int)*2+
-                         self.is_center_closer.astype(np.int),0,2)-1
+                         self.is_closest_hunter_closer.astype(np.int),0,2)-1
         return reward
         
         
@@ -322,7 +322,7 @@ class GroupedHunterEnvironment:
             group_shift = self.group_shift
         normalized_group_shift = (group_shift/np.linalg.norm(group_shift))
         
-        self.is_center_closer = is_center_closer
+        self.is_closest_hunter_closer = is_closest_hunter_closer
         self.is_hunter_at_target_distance = is_hunter_at_target_distance
         
         self.state = np.concatenate(
