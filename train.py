@@ -11,11 +11,11 @@ import shutil
 
 def select_action(policy,state):
     #Select an action (0 or 1) by running policy model and choosing based on the probabilities in state
-    state_mu,state_logsigma = policy(torch.Tensor(np.hstack(state)))
+    _,_ = policy(torch.Tensor(state)) #state_mu,state_logsigma
     action,log_prob = policy.sample_action()
     # Add log probability of our chosen action to our history    
     if policy.policy_history.dim() != 0:
-        policy.policy_history = torch.cat([policy.policy_history, log_prob.unsqueeze(0)])
+        policy.policy_history = torch.cat([policy.policy_history, log_prob.unsqueeze(0)], dim=0)
     else:
         policy.policy_history = (log_prob.unsqueeze(0))
     return action
@@ -46,18 +46,15 @@ def compute_loss(policy, rewards, baseline_rewards=None):
         rewards = (rewards - rewards.mean()) / (rewards.std())
     
     # Calculate loss
-    loss = (torch.sum(torch.mul(policy.policy_history, rewards).mul(-1), -1))
+    loss = (torch.sum(torch.mul(policy.policy_history, rewards).mul(-1), 0))
     
     policy.loss_history.append(loss.data[0])
-
-   
+  
     return loss
 
 def compute_baseline_loss(baseline, rewards, baseline_rewards):
     
-    # Calculate loss
-#     rewards = torch.FloatTensor(rewards)
-#     baseline_rewards = torch.cat(baseline_rewards, dim=-1)
+    # Calculate loss  
     loss = (rewards-baseline_rewards).pow(2).mean()
     
     baseline.loss_history.append(loss.data[0])
@@ -66,14 +63,17 @@ def compute_baseline_loss(baseline, rewards, baseline_rewards):
     return loss
 
 def play_episode(policy, env, baseline):
-    
+    """play one episode from the initial point"""
     for time in range(1000):
         action = select_action(policy, env.state)
         
         #baseline update
         if baseline is not None:
             baseline_reward = baseline(torch.Tensor(env.state))
-            baseline.reward_episode.append(baseline_reward)
+            if len(baseline_reward.size())==2:
+                baseline.reward_episode.append(baseline_reward.t()) 
+            else:
+                baseline.reward_episode.append(baseline_reward)
         # Step through environment using chosen action    
         # conmpute reward, renew state
         reward = env.step(action) 
@@ -82,6 +82,7 @@ def play_episode(policy, env, baseline):
         
     
 def visualize(env, policy, baseline):
+    """visualization for the hunter-victim during learning - used as an argument to function train"""
     
     plt.figure(figsize=(16, 10))
 
@@ -115,8 +116,45 @@ def visualize(env, policy, baseline):
 
     plt.show()
     
-def train(policy,env, episodes,learning_rate = 1e-4,gamma = 0.9, verbose=True, save_policy = True, batch=1, baseline = None):
+def visualize_group(env, policy, baseline):
+    """visualization for the group during learning - used as an argument to function train"""
+    
+    plt.figure(figsize=(16, 10))
+
+    plt.subplot(221)
+    plt.title("reward")
+    plt.xlabel("#iteration")
+    plt.ylabel("reward")
+    plt.plot(policy.reward_history, label = 'reward')
+
+    plt.subplot(222)
+    hunter = np.array(env.hunter_trajectory).T
+    plt.plot(hunter[0], hunter[1], label = 'hunter')
+    plt.plot(hunter[0][0], hunter[1][0], 'o', label = 'initiial_hunter')
+    plt.legend()
+
+    if baseline is not None:
+        plt.subplot(223)
+        plt.title("baseline_reward")
+        plt.xlabel("#iteration")
+        plt.ylabel("reward")
+        plt.plot(baseline.reward_history, label = 'reward')
+
+        plt.subplot(224)
+        plt.title("baseline_loss")
+        plt.xlabel("#iteration")
+        plt.ylabel("loss")
+        plt.plot(baseline.loss_history, label = 'loss')
+
+    plt.show()
+    
+from train import *
+
+def train(policy,env, episodes,learning_rate = 1e-4,gamma = 0.9, verbose=True, save_policy = True, batch=1, 
+          visualize = visualize_group, baseline = None):
+    
     optimizer = optim.Adam(policy.parameters(), lr=learning_rate)
+    
     if baseline is not None: b_optimizer = optim.Adam(baseline.parameters(), lr=1e-3)
     
     dirpath = 'train_models'
@@ -131,9 +169,10 @@ def train(policy,env, episodes,learning_rate = 1e-4,gamma = 0.9, verbose=True, s
         
         values = compute_value_function(policy, gamma)
         
+        
         if baseline is not None:
             # baseline backprop
-            baseline_values = torch.cat(baseline.reward_episode, dim=-1)
+            baseline_values = torch.cat(baseline.reward_episode, dim=0)
             b_loss = compute_baseline_loss(baseline, values, baseline_values) 
             b_optimizer.zero_grad()
             b_loss.backward(retain_graph=True)
@@ -141,13 +180,9 @@ def train(policy,env, episodes,learning_rate = 1e-4,gamma = 0.9, verbose=True, s
         else:
             baseline_values = None
         
-#         if baseline is not None:
-#             baseline_rewards = compute_reward(baseline, gamma)
-#         else: 
-#             baseline_rewards = None
-        
         # policy backprop
         loss += compute_loss(policy, values, baseline_values)
+        loss = loss.mean()
         policy.reset_game()    
         if baseline is not None: baseline.reset_game()
             
@@ -171,4 +206,4 @@ def train(policy,env, episodes,learning_rate = 1e-4,gamma = 0.9, verbose=True, s
             
             if baseline is not None:
                 print('Last reward: {:.2f}'.format(baseline.reward_history[-1]))
-                
+  
