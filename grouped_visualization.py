@@ -72,7 +72,7 @@ def model_hunter_learning(name,policy,env,hunter_start_position = None):
     while True:
         policy(torch.Tensor(state))
         action,_ = policy.sample_action()
-        reward = env.step(action)
+        reward = env.step(action).sum()
         rewards = np.append(rewards,reward)
 #         ema_rewards = np.append(ema_rewards,a* ema_rewards[-1] + (1-a)*reward)
         state = env.state
