@@ -333,8 +333,7 @@ class GroupedHunterEnvironment:
              normalized_closed_hunter_shift,
              np.tile(normalized_group_shift,(10,1)),
              self.hunter_force),axis = -1)
-        
-        
+
         
     def reset(self,initial_hunter_positions = None):
         if initial_hunter_positions is None:
