@@ -118,7 +118,7 @@ class VelocityHunterEnvironment:
         
 
 class ForceHunterEnvironment:
-    def __init__(self,victim_policy,target_distance = 2,distance_accuracy = 1, time = 0, hunter_position = [0,0],mass = 1):
+    def __init__(self,victim_policy,target_distance = 2,distance_accuracy = 1, time = 0, hunter_position = [0,0],mass = 1, external_force = 0,energy_loss = lambda f:0):
         self.observation_space = 8
         self.action_space = 2
         self.distance_accuracy = distance_accuracy
@@ -126,6 +126,8 @@ class ForceHunterEnvironment:
         self.victim_policy = victim_policy
         self.time = time
         self.mass = mass
+        self.external_force = np.array(external_force)
+        self.energy_loss = energy_loss
         
         self.victim_position = np.array(self.victim_policy(self.time))
         last_victim_position = np.array(self.victim_policy(self.time-1))
@@ -156,7 +158,7 @@ class ForceHunterEnvironment:
         
         self.hunter_force = np.array(action)
         last_shift = self.hunter_shift
-        self.hunter_shift = last_shift+self.hunter_force/self.mass
+        self.hunter_shift = last_shift+(self.hunter_force+self.external_force)/self.mass
         
     
     def get_reward(self):
@@ -166,7 +168,8 @@ class ForceHunterEnvironment:
             reward = 0
         else:
             reward = -1
-        return reward
+        full_reward = reward - self.energy_loss(self.hunter_force)
+        return full_reward
         
         
     def update_positions(self):
@@ -215,7 +218,8 @@ class ForceHunterEnvironment:
         
         self.__init__(victim_policy=self.victim_policy, target_distance=self.target_distance, 
                       distance_accuracy=self.distance_accuracy, time=time,
-                      hunter_position=hunter_position, mass = self.mass)
+                      hunter_position=hunter_position, mass = self.mass,external_force = self.external_force,
+                      energy_loss = self.energy_loss)
         
         
 class GroupedHunterEnvironment:
