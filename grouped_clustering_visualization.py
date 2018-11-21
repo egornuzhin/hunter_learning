@@ -6,7 +6,7 @@ import matplotlib.cm as cm
 
 from time import sleep
 
-def create_graph(name,num_hunters,target_distance,distance_accuracy):
+def create_graph(name,num_hunters,comfort_zone_radius,group_center_radius):
     plt.ion()
     fig = plt.figure(figsize = (10,20))
     ax_model = fig.add_subplot(211)
@@ -19,19 +19,22 @@ def create_graph(name,num_hunters,target_distance,distance_accuracy):
         line, = ax_model.plot(0,0,'-',color = colors[hunter_num],alpha = 0.2)
         point, = ax_model.plot(0,0,'*',color = colors[hunter_num])
         center = [0,0]
-        r = target_distance + distance_accuracy
-        circle = Wedge(center, r, 0, 360, width=2*distance_accuracy,alpha=0.3,color = colors[hunter_num])
+        r = comfort_zone_radius
+        circle = Wedge(center, r, 0, 360,alpha=0.3,color = colors[hunter_num])
         patch, = ax_model.add_patch(circle),
         lines += [line,point,patch],
     group_line, = ax_model.plot(0,0,'-',color = 'b')
     group_point, = ax_model.plot(0,0,'*',color = 'b',label = 'Group center')
+    circle = Wedge([0,0], group_center_radius, 0, 360,alpha=0.3,color = colors[hunter_num])
+    group_patch, = ax_model.add_patch(circle),
+        
     reward_line, = ax_reward.plot(0, 0)
     ax_model.legend()
-    graph = group_line,group_point,lines,reward_line,fig, (ax_model,ax_reward)
+    graph = (group_line,group_point,group_patch),lines,reward_line,fig, (ax_model,ax_reward)
     return graph
 
 def update_graph(graph,hunter_trajectory,group_tragectory,rewards):
-    group_line,group_point,lines,reward_line,fig, (ax_model,ax_reward) = graph
+    (group_line,group_point,group_patch),lines,reward_line,fig, (ax_model,ax_reward) = graph
     for i,(line,point,patch) in enumerate(lines):
         trajectoty = hunter_trajectory[i]
         center = trajectoty[-1]
@@ -41,6 +44,7 @@ def update_graph(graph,hunter_trajectory,group_tragectory,rewards):
         
     group_line.set_data(*group_tragectory.T)
     group_point.set_data(*group_tragectory[-1])
+    group_patch.set_center(group_tragectory[-1])
     
 #     reward_line.set_data(np.arange(len(ema_rewards)),ema_rewards)
     reward_line.set_data(np.arange(len(rewards)),rewards)
@@ -61,7 +65,7 @@ def update_graph(graph,hunter_trajectory,group_tragectory,rewards):
 
     
 def model_hunter_learning(name,policy,env,hunter_start_position = None):
-    graph = create_graph(name,env.num_hunters,env.target_distance,env.distance_accuracy)
+    graph = create_graph(name,env.num_hunters,env.comfort_zone_radius,env.group_center_radius)
     if hunter_start_position == 0:
         hunter_start_position = np.zeros((env.num_hunters,2))
     env.reset(hunter_start_position)

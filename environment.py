@@ -322,6 +322,7 @@ class GroupedHunterEnvironment:
             group_shift = self.group_shift
         normalized_group_shift = (group_shift/np.linalg.norm(group_shift))
         
+        self.is_center_closer = is_center_closer
         self.is_closest_hunter_closer = is_closest_hunter_closer
         self.is_hunter_at_target_distance = is_hunter_at_target_distance
         
@@ -331,7 +332,7 @@ class GroupedHunterEnvironment:
              is_center_closer[:,np.newaxis],
              normalized_hunter_shift,
              normalized_closed_hunter_shift,
-             np.tile(normalized_group_shift,(10,1)),
+             np.tile(normalized_group_shift,(self.num_hunters,1)),
              self.hunter_force),axis = -1)
 
         
@@ -340,6 +341,135 @@ class GroupedHunterEnvironment:
             initial_hunter_positions = self.initial_hunter_positions
         self.__init__(target_distance = self.target_distance,
                       distance_accuracy = self.distance_accuracy,
-                      mass = self.distance_accuracy,
+                      mass = self.mass,
+                      num_hunters = self.num_hunters,
+                      initial_hunter_positions = initial_hunter_positions)
+        
+
+class GroupedClusteringHunterEnvironment:
+    def __init__(self,
+                 comfort_zone_radius = 2,
+                 group_center_radius= 1000,
+                 mass = 1,num_hunters = 10, 
+                 initial_hunter_positions = None):
+        self.observation_space = 12
+        self.action_space = 2
+        self.comfort_zone_radius = comfort_zone_radius
+        self.group_center_radius = group_center_radius
+        self.mass = mass
+        self.num_hunters = num_hunters
+        self.initial_hunter_positions = initial_hunter_positions
+        
+        if initial_hunter_positions is None:
+             self.hunter_positions = self.get_random_positions()
+        else:
+            self.hunter_positions = initial_hunter_positions
+        
+        self.closet_hunter_indices = self.get_closest_hunter_indices()
+        
+        self.hunter_shift = np.zeros((self.num_hunters,2))
+        self.group_shift = np.zeros(2)
+        self.hunter_force = np.zeros((self.num_hunters,2))
+        
+        
+        self.hunter_trajectory = np.array(self.hunter_positions)[:,np.newaxis,:]
+        
+        self.group_position = self.hunter_positions.mean(axis = 0)
+        self.group_trajectory = np.array([self.group_position])
+        
+        self.closed_distances = np.linalg.norm(self.hunter_positions - 
+                                               self.hunter_positions[self.closet_hunter_indices],
+                                               axis = 1)
+        self.distances_to_center = np.linalg.norm(self.hunter_positions - self.group_position,axis = 1)
+        self.update_state()
+        
+    def get_random_positions(self):
+        scattering = self.comfort_zone_radius*self.num_hunters
+        return np.random.randn(self.num_hunters,2)*scattering
+        
+    def get_closest_hunter_indices(self):
+        closet_hunter_indices = np.argmax(squareform(1/pdist(self.hunter_positions)),axis = 0)
+        return closet_hunter_indices
+        
+        
+    def step(self, action):
+        self.hunter_force = np.array(action)
+        self.update_shifts()
+        self.update_positions()
+        self.update_state()
+        reward = self.get_reward()
+        return reward
+    
+    def update_shifts(self):
+        last_shift = self.hunter_shift
+        self.hunter_shift = last_shift+self.hunter_force/self.mass
+        self.group_shift = self.hunter_shift.mean(axis = 0)
+        
+    
+    def get_reward(self):
+        gc_reward = np.clip(self.is_hunter_inside_group_center.astype(np.int)*2+
+                            self.is_center_closer.astype(np.int),0,2)-1
+        cz_penalty = self.does_closest_hunter_break_cz.astype(np.int)
+        return gc_reward - cz_penalty
+        
+        
+    def update_positions(self):
+        #hunter
+        self.hunter_positions = self.hunter_positions+self.hunter_shift
+        self.hunter_trajectory = np.concatenate((self.hunter_trajectory,
+                                                   self.hunter_positions[:,np.newaxis,:]),axis = 1)
+        # group
+        self.group_position = self.hunter_positions.mean(axis = 0)
+        self.closet_hunter_indices = self.get_closest_hunter_indices()
+        self.group_trajectory = np.append(self.group_trajectory,[self.group_position],axis=0)
+    
+    def update_state(self):
+        new_closed_distances = np.linalg.norm(self.hunter_positions-
+                                              self.hunter_positions[self.closet_hunter_indices],
+                                              axis = 1)
+        is_closest_hunter_closer = new_closed_distances<self.closed_distances
+        self.closed_distances = new_closed_distances
+        does_closest_hunter_break_cz = self.closed_distances<self.comfort_zone_radius
+        
+        
+        new_distances_to_center = np.linalg.norm(self.hunter_positions-self.group_position,axis = 1)
+        is_center_closer = new_distances_to_center<self.distances_to_center
+        self.distances_to_center = new_distances_to_center
+        is_hunter_inside_group_center = self.distances_to_center < self.group_center_radius
+        
+        
+        shift_is_zero = (self.hunter_shift == 0) * (np.flip(self.hunter_shift,1) == 0)
+        hunter_shift = np.where(shift_is_zero,np.random.rand(self.num_hunters,2),self.hunter_shift)
+        normalized_hunter_shift = hunter_shift/(np.linalg.norm(hunter_shift,axis = 1)[:,np.newaxis])
+        normalized_closed_hunter_shift = normalized_hunter_shift[self.closet_hunter_indices]
+        
+        if np.linalg.norm(self.group_shift) == 0:
+            group_shift = np.random.rand(2)
+        else:
+            group_shift = self.group_shift
+        normalized_group_shift = (group_shift/np.linalg.norm(group_shift))
+        
+        self.is_closest_hunter_closer = is_closest_hunter_closer
+        self.does_closest_hunter_break_cz = does_closest_hunter_break_cz
+        self.is_center_closer = is_center_closer
+        self.is_hunter_inside_group_center = is_hunter_inside_group_center
+        
+        self.state = np.concatenate(
+            (is_closest_hunter_closer[:,np.newaxis],
+             does_closest_hunter_break_cz[:,np.newaxis],
+             is_center_closer[:,np.newaxis],
+             is_hunter_inside_group_center[:,np.newaxis],
+             normalized_hunter_shift,
+             normalized_closed_hunter_shift,
+             np.tile(normalized_group_shift,(self.num_hunters,1)),
+             self.hunter_force),axis = -1)
+
+        
+    def reset(self,initial_hunter_positions = None):
+        if initial_hunter_positions is None:
+            initial_hunter_positions = self.initial_hunter_positions
+        self.__init__(comfort_zone_radius = self.comfort_zone_radius,
+                      group_center_radius = self.group_center_radius,
+                      mass = self.mass,
                       num_hunters = self.num_hunters,
                       initial_hunter_positions = initial_hunter_positions)
