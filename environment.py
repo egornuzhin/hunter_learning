@@ -118,7 +118,7 @@ class VelocityHunterEnvironment:
         
 
 class ForceHunterEnvironment:
-    def __init__(self,victim_policy,target_distance = 2,distance_accuracy = 1, time = 0, hunter_position = [0,0],mass = 1):
+    def __init__(self,victim_policy,target_distance = 2,distance_accuracy = 1, time = 0, hunter_position = [0,0],mass = 1, external_force = 0,energy_loss = lambda f:0):
         self.observation_space = 8
         self.action_space = 2
         self.distance_accuracy = distance_accuracy
@@ -126,6 +126,8 @@ class ForceHunterEnvironment:
         self.victim_policy = victim_policy
         self.time = time
         self.mass = mass
+        self.external_force = np.array(external_force)
+        self.energy_loss = energy_loss
         
         self.victim_position = np.array(self.victim_policy(self.time))
         last_victim_position = np.array(self.victim_policy(self.time-1))
@@ -156,7 +158,7 @@ class ForceHunterEnvironment:
         
         self.hunter_force = np.array(action)
         last_shift = self.hunter_shift
-        self.hunter_shift = last_shift+self.hunter_force/self.mass
+        self.hunter_shift = last_shift+(self.hunter_force+self.external_force)/self.mass
         
     
     def get_reward(self):
@@ -166,7 +168,8 @@ class ForceHunterEnvironment:
             reward = 0
         else:
             reward = -1
-        return reward
+        full_reward = reward - self.energy_loss(self.hunter_force)
+        return full_reward
         
         
     def update_positions(self):
@@ -215,7 +218,8 @@ class ForceHunterEnvironment:
         
         self.__init__(victim_policy=self.victim_policy, target_distance=self.target_distance, 
                       distance_accuracy=self.distance_accuracy, time=time,
-                      hunter_position=hunter_position, mass = self.mass)
+                      hunter_position=hunter_position, mass = self.mass,external_force = self.external_force,
+                      energy_loss = self.energy_loss)
         
         
 class GroupedHunterEnvironment:
@@ -262,7 +266,8 @@ class GroupedHunterEnvironment:
     def get_closest_hunter_indices(self):
         closet_hunter_indices = np.argmax(squareform(1/pdist(self.hunter_positions)),axis = 0)
         return closet_hunter_indices
-
+        
+        
     def step(self, action):
         self.hunter_force = np.array(action)
         self.update_shifts()
@@ -275,19 +280,14 @@ class GroupedHunterEnvironment:
         last_shift = self.hunter_shift
         self.hunter_shift = last_shift+self.hunter_force/self.mass
         self.group_shift = self.hunter_shift.mean(axis = 0)
-
-    # def get_reward(self):
-    #     reward = np.clip(self.is_hunter_at_target_distance.astype(np.int)*2+
-    #                      self.is_center_closer.astype(np.int),0,2)-1
-    #     return reward
-
+        
+    
     def get_reward(self):
-        reward = self.is_hunter_at_target_distance.astype(np.int)*2+ \
-                         self.is_center_closer.astype(np.int)-self.is_hunter_very_close*(-3)
+        reward = np.clip(self.is_hunter_at_target_distance.astype(np.int)*2+
+                         self.is_closest_hunter_closer.astype(np.int),0,2)-1
         return reward
-
-
-
+        
+        
     def update_positions(self):
         #hunter
         self.hunter_positions = self.hunter_positions+self.hunter_shift
@@ -305,9 +305,6 @@ class GroupedHunterEnvironment:
         is_closest_hunter_closer = new_closed_distances<self.closed_distances
         is_hunter_at_target_distance = np.abs(new_closed_distances-
                                               self.target_distance)<self.distance_accuracy
-        #new
-        self.is_hunter_very_close = new_closed_distances < self.target_distance-self.distance_accuracy
-
         self.closed_distances = new_closed_distances
         
         new_distances_to_center = np.linalg.norm(self.hunter_positions-self.group_position,axis = 1)
@@ -325,7 +322,7 @@ class GroupedHunterEnvironment:
             group_shift = self.group_shift
         normalized_group_shift = (group_shift/np.linalg.norm(group_shift))
         
-        self.is_center_closer = is_center_closer
+        self.is_closest_hunter_closer = is_closest_hunter_closer
         self.is_hunter_at_target_distance = is_hunter_at_target_distance
         
         self.state = np.concatenate(
@@ -337,7 +334,8 @@ class GroupedHunterEnvironment:
              np.tile(normalized_group_shift,(10,1)),
              self.hunter_force),axis = -1)
 
-    def reset(self,initial_hunter_positions=None):
+        
+    def reset(self,initial_hunter_positions = None):
         if initial_hunter_positions is None:
             initial_hunter_positions = self.initial_hunter_positions
         self.__init__(target_distance = self.target_distance,
