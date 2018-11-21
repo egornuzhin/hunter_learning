@@ -8,7 +8,6 @@ import os
 import shutil
 
 
-
 def select_action(policy,state):
     #Select an action (0 or 1) by running policy model and choosing based on the probabilities in state
     _,_ = policy(torch.Tensor(state)) #state_mu,state_logsigma
@@ -19,6 +18,7 @@ def select_action(policy,state):
     else:
         policy.policy_history = (log_prob.unsqueeze(0))
     return action
+
 
 def compute_value_function(policy,gamma):
     
@@ -52,6 +52,7 @@ def compute_loss(policy, rewards, baseline_rewards=None):
   
     return loss
 
+
 def compute_baseline_loss(baseline, rewards, baseline_rewards):
     
     # Calculate loss  
@@ -61,6 +62,7 @@ def compute_baseline_loss(baseline, rewards, baseline_rewards):
     baseline.reward_history.append(torch.cat(baseline.reward_episode, dim=-1).mean().data)
    
     return loss
+
 
 def play_episode(policy, env, baseline):
     """play one episode from the initial point"""
@@ -115,7 +117,8 @@ def visualize(env, policy, baseline):
         plt.plot(baseline.loss_history, label = 'loss')
 
     plt.show()
-    
+
+
 def visualize_group(env, policy, baseline):
     """visualization for the group during learning - used as an argument to function train"""
     
@@ -150,8 +153,23 @@ def visualize_group(env, policy, baseline):
     
 from train import *
 
-def train(policy,env, episodes,learning_rate = 1e-4,gamma = 0.9, verbose=True, save_policy = True, batch=1, 
-          visualize = visualize_group, baseline = None):
+
+def train(policy,env, episodes, learning_rate = 1e-4, gamma=0.9, verbose=True,
+          save_policy=True, batch=1, visualize=visualize_group, baseline=None):
+    """
+
+    :param policy: (class) Hunter policy
+    :param env: (class) Environment
+    :param episodes: (int) number of episodes to learn
+    :param learning_rate: (float)
+    :param gamma: (float) discounting factor
+    :param verbose: (boolean) whether to print results
+    :param save_policy: (boolean)
+    :param batch: (int) number of batch to propagate
+    :param visualize: (function)
+    :param baseline: (class) baseline net
+    :return:
+    """
     
     optimizer = optim.Adam(policy.parameters(), lr=learning_rate)
     
@@ -192,7 +210,7 @@ def train(policy,env, episodes,learning_rate = 1e-4,gamma = 0.9, verbose=True, s
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            loss=0
+            loss = 0
 
         if save_policy and episode % 100 == 0:
             torch.save(policy,dirpath+'/policy_'+str(episode)+'.p') 
