@@ -40,10 +40,10 @@ def compute_loss(policy, rewards, baseline_rewards=None):
     policy.reward_history.append(np.sum(policy.reward_episode))
     # Scale rewards
     if baseline_rewards is None:
-        rewards = (rewards - rewards.mean()) / (rewards.std())
+        rewards = (rewards - rewards.mean()) / (rewards.std()+1e-10)
     else:
         rewards = rewards - baseline_rewards
-        rewards = (rewards - rewards.mean()) / (rewards.std())
+        rewards = (rewards - rewards.mean()) / (rewards.std()+1e-10)
     
     # Calculate loss
     loss = (torch.sum(torch.mul(policy.policy_history, rewards).mul(-1), 0))
@@ -151,11 +151,9 @@ def visualize_group(env, policy, baseline):
 
     plt.show()
     
-from train import *
 
-
-def train(policy,env, episodes, learning_rate = 1e-4, gamma=0.9, verbose=True,
-          save_policy=True, batch=1, visualize=visualize_group, baseline=None):
+def train(policy,env, episodes, learning_rate = 1e-4,betas=(0.9, 0.999),eps = 1e-8, gamma=0.9, verbose=True,
+          save_policy=True, batch=1, visualize=visualize_group, baseline=None, dirpath = 'train_models'):
     """
 
     :param policy: (class) Hunter policy
@@ -171,11 +169,10 @@ def train(policy,env, episodes, learning_rate = 1e-4, gamma=0.9, verbose=True,
     :return:
     """
     
-    optimizer = optim.Adam(policy.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(policy.parameters(), lr=learning_rate,betas = betas, eps = eps)
     
     if baseline is not None: b_optimizer = optim.Adam(baseline.parameters(), lr=1e-3)
     
-    dirpath = 'train_models'
     if os.path.exists(dirpath):
         shutil.rmtree(dirpath)
     os.mkdir(dirpath)

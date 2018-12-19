@@ -189,9 +189,14 @@ class ForceHunterEnvironment:
         is_hunter_closer = new_distance<self.distance
         is_hunter_on_target_distance = abs(new_distance-self.target_distance)<self.distance_accuracy
         self.distance = new_distance
-        normalized_victim_shift = self.victim_shift/np.linalg.norm(self.victim_shift)
+        if np.linalg.norm(self.victim_shift) == 0:
+            victim_shift = np.random.randn(2)
+            normalized_victim_shift = victim_shift/np.linalg.norm(victim_shift)
+        else:
+            normalized_victim_shift = self.victim_shift/np.linalg.norm(self.victim_shift)
+        
         if np.linalg.norm(self.hunter_shift) == 0:
-            hunter_shift = np.random.rand(2)
+            hunter_shift = np.random.randn(2)
             normalized_hunter_shift = hunter_shift/np.linalg.norm(hunter_shift)
         else:
             normalized_hunter_shift = self.hunter_shift/np.linalg.norm(self.hunter_shift)
@@ -351,7 +356,9 @@ class GroupedClusteringHunterEnvironment:
                  comfort_zone_radius = 2,
                  group_center_radius= 1000,
                  mass = 1,num_hunters = 10, 
+                 external_force = 0,
                  initial_hunter_positions = None):
+        self.external_force = external_force
         self.observation_space = 12
         self.action_space = 2
         self.comfort_zone_radius = comfort_zone_radius
@@ -381,10 +388,11 @@ class GroupedClusteringHunterEnvironment:
                                                self.hunter_positions[self.closet_hunter_indices],
                                                axis = 1)
         self.distances_to_center = np.linalg.norm(self.hunter_positions - self.group_position,axis = 1)
+        self.time = np.random.randint(0,1000)
         self.update_state()
         
     def get_random_positions(self):
-        scattering = self.comfort_zone_radius*self.num_hunters
+        scattering = max(self.comfort_zone_radius*self.num_hunters,self.group_center_radius)
         return np.random.randn(self.num_hunters,2)*scattering
         
     def get_closest_hunter_indices(self):
@@ -393,6 +401,7 @@ class GroupedClusteringHunterEnvironment:
         
         
     def step(self, action):
+        self.time +=1
         self.hunter_force = np.array(action)
         self.update_shifts()
         self.update_positions()
@@ -400,9 +409,15 @@ class GroupedClusteringHunterEnvironment:
         reward = self.get_reward()
         return reward
     
+    def get_external_force(self):
+        if np.linalg.norm(self.external_force)>0:
+            return np.random.exponential([1,1],(self.num_hunters,2))*np.array(self.external_force)
+        else:
+            return 0
+    
     def update_shifts(self):
         last_shift = self.hunter_shift
-        self.hunter_shift = last_shift+self.hunter_force/self.mass
+        self.hunter_shift = last_shift+(self.hunter_force+self.get_external_force())/self.mass
         self.group_shift = self.hunter_shift.mean(axis = 0)
         
     
@@ -439,12 +454,12 @@ class GroupedClusteringHunterEnvironment:
         
         
         shift_is_zero = (self.hunter_shift == 0) * (np.flip(self.hunter_shift,1) == 0)
-        hunter_shift = np.where(shift_is_zero,np.random.rand(self.num_hunters,2),self.hunter_shift)
+        hunter_shift = np.where(shift_is_zero,np.random.randn(self.num_hunters,2),self.hunter_shift)
         normalized_hunter_shift = hunter_shift/(np.linalg.norm(hunter_shift,axis = 1)[:,np.newaxis])
         normalized_closed_hunter_shift = normalized_hunter_shift[self.closet_hunter_indices]
         
         if np.linalg.norm(self.group_shift) == 0:
-            group_shift = np.random.rand(2)
+            group_shift = np.random.randn(2)
         else:
             group_shift = self.group_shift
         normalized_group_shift = (group_shift/np.linalg.norm(group_shift))
@@ -472,4 +487,5 @@ class GroupedClusteringHunterEnvironment:
                       group_center_radius = self.group_center_radius,
                       mass = self.mass,
                       num_hunters = self.num_hunters,
+                      external_force = self.external_force,
                       initial_hunter_positions = initial_hunter_positions)

@@ -12,14 +12,14 @@ def create_graph(name,num_hunters,comfort_zone_radius,group_center_radius):
     ax_model = fig.add_subplot(211)
     ax_reward = fig.add_subplot(212)
     ax_model.set_title(name,fontsize=30)
-    ax_reward.set_title('Reword',fontsize=30)
+    ax_reward.set_title('Reward',fontsize=30)
     lines = []
     colors = cm.rainbow(np.linspace(0, 1, num_hunters))
     for hunter_num in range(num_hunters):
         line, = ax_model.plot(0,0,'-',color = colors[hunter_num],alpha = 0.2)
         point, = ax_model.plot(0,0,'*',color = colors[hunter_num])
         center = [0,0]
-        r = comfort_zone_radius
+        r = comfort_zone_radius/2
         circle = Wedge(center, r, 0, 360,alpha=0.3,color = colors[hunter_num])
         patch, = ax_model.add_patch(circle),
         lines += [line,point,patch],
